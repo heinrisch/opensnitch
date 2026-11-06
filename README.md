@@ -22,6 +22,35 @@
 
 <p align="center">•• <a href="#key-features">Key Features</a> • <a href="#download">Download</a> • <a href="#installation">Installation</a> • <a href="#opensnitch-in-action">Usage examples</a> • <a href="#in-the-press">In the press</a> ••</p>
 
+### Local build and update
+
+Run `make build` to build the daemon and package the UI and its dependencies in
+`.build/`. Requires Go (see `daemon/go.mod`), Python 3 with venv/pip, protoc,
+a C compiler, pkg-config, and the libnetfilter_queue development headers.
+The first build downloads Python dependencies and Go protobuf generators.
+
+Run `make update` **as your desktop user, without sudo**, from a terminal in your
+graphical session. It builds everything, asks sudo to install the daemon and an
+isolated UI runtime in `/opt/opensnitch-local`, restarts the system daemon, stops
+your running UI, and launches the new UI. Existing rules and configuration are
+preserved. The daemon uses a systemd override pointing to
+`/usr/local/bin/opensnitchd`; the UI launcher is `/usr/local/bin/opensnitch-ui`.
+`make install-local` installs and restarts only the daemon;
+`make restart-local` restarts the installed daemon and UI without rebuilding.
+UI startup errors are logged in `~/.local/state/opensnitch/ui.log` (or under
+`$XDG_STATE_HOME` when set).
+
+Popups include one-click Allow/Block buttons for the application, exact hostname,
+and parent domain, each with Forever, Once, and 1h choices. For example,
+`bla.example.com` offers both `Allow bla.example.com` and `Allow example.com`.
+Parent-domain rules match the domain itself and all its subdomains across all
+applications. The parent is determined using a bundled public suffix list,
+including private suffixes, so `bla.example.co.uk` offers `example.co.uk` and
+`api.alice.github.io` offers `alice.github.io`. No network lookup is needed.
+Domain shortcuts are disabled when no hostname is available; parent-domain
+shortcuts are hidden when there is no broader registrable domain.
+The existing controls remain available for custom scopes and other durations.
+
 <p align="center">
   <img src="https://user-images.githubusercontent.com/2742953/85205382-6ba9cb00-b31b-11ea-8e9a-bd4b8b05a236.png" alt="OpenSnitch"/>
 </p>

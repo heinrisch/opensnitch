@@ -1,12 +1,29 @@
 from slugify import slugify
 import os
 import ipaddress
+import tldextract
 
 from PyQt6.QtCore import QCoreApplication as QC
 
 from opensnitch.config import Config
 from opensnitch.dialogs.prompt import constants
 from opensnitch.utils.network_aliases import NetworkAliases
+
+# Use the bundled public suffix list: popups must not perform network lookups.
+_domain_extract = tldextract.TLDExtract(
+    suffix_list_urls=(), cache_dir=None, include_psl_private_domains=True)
+
+
+def get_parent_domain(host):
+    host = host.rstrip('.').lower()
+    try:
+        ipaddress.ip_address(host)
+        return ""
+    except ValueError:
+        pass
+    result = _domain_extract(host)
+    parent = result.top_domain_under_public_suffix
+    return parent if parent and parent != host else ""
 
 def truncate_text(text, max_size=64):
     if len(text) > max_size:

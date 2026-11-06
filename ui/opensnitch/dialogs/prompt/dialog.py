@@ -147,6 +147,98 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
             self.actionButton.setText(self._action_text[self._default_action])
             self.actionButton.setIcon(self._action_icon[self._default_action])
         self.actionButton.clicked.connect(self._on_deny_btn_clicked)
+        self._setup_quick_actions()
+
+    def _setup_quick_actions(self):
+        self.setMinimumWidth(560)
+        self.gridLayout.setContentsMargins(12, 12, 12, 12)
+        self.gridLayout.setVerticalSpacing(12)
+        panel = QtWidgets.QGroupBox(QC.translate("popups", "Quick decisions"), self)
+        layout = QtWidgets.QGridLayout(panel)
+        layout.setContentsMargins(12, 18, 12, 12)
+        layout.setHorizontalSpacing(8)
+        layout.setVerticalSpacing(8)
+        self._domain_buttons = []
+        self._quick_rows = []
+        durations = (("Forever", 8), ("Once", 0), ("1h", 5))
+        rows = (("Allow app", Config.ACTION_ALLOW_IDX, False),
+                ("Block app", Config.ACTION_DROP_IDX, False),
+                ("Allow domain", Config.ACTION_ALLOW_IDX, True),
+                ("Block domain", Config.ACTION_DROP_IDX, True),
+                ("Allow parent domain", Config.ACTION_ALLOW_IDX, "parent"),
+                ("Block parent domain", Config.ACTION_DROP_IDX, "parent"))
+        for row, (label, action, domain) in enumerate(rows, 1):
+            scope_label = QtWidgets.QLabel(QC.translate("popups", label))
+            scope_label.setTextFormat(QtCore.Qt.TextFormat.PlainText)
+            scope_label.setWordWrap(True)
+            scope_label.setMinimumWidth(150)
+            scope_label.setMaximumWidth(240)
+            layout.addWidget(scope_label, row, 0)
+            buttons = []
+            for column, (duration, index) in enumerate(durations, 1):
+                button = QtWidgets.QPushButton(QC.translate("popups", duration))
+                button.setMinimumHeight(32)
+                button.setAutoDefault(False)
+                button.clicked.connect(
+                    lambda checked=False, a=action, d=index, host=domain:
+                        self._on_quick_action(a, d, host))
+                layout.addWidget(button, row, column)
+                buttons.append(button)
+                if domain:
+                    self._domain_buttons.append(button)
+            self._quick_rows.append((scope_label, buttons, action, domain))
+        for column in range(1, 4):
+            layout.setColumnStretch(column, 1)
+        self.gridLayout.addWidget(panel, 2, 0)
+
+    def _update_quick_actions(self, app_name, con):
+        has_domain = self.whatCombo.findData(constants.FIELD_DST_HOST) >= 0
+        parent = utils.get_parent_domain(con.dst_host) if has_domain else ""
+        for label, buttons, action, domain in self._quick_rows:
+            is_parent = domain == "parent"
+            target = parent if is_parent else con.dst_host if domain else app_name
+            if not target:
+                target = QC.translate("popups", "domain" if domain else "application")
+            text = QC.translate("popups", "Allow {0}" if action == Config.ACTION_ALLOW_IDX else "Block {0}").format(target)
+            label.setText(text)
+            label.setToolTip(text)
+            label.setEnabled(not domain or has_domain)
+            label.setVisible(not is_parent or bool(parent))
+            for button in buttons:
+                button.setVisible(not is_parent or bool(parent))
+                button.setEnabled(not domain or has_domain)
+                button.setAccessibleName("{0} · {1}".format(text, button.text()))
+                scope = (QC.translate("popups", "This exact hostname, across all applications")
+                         if domain else con.process_path)
+                if is_parent:
+                    scope = QC.translate("popups", "{0} and all its subdomains, across all applications").format(parent)
+                button.setToolTip("{0} · {1}\n{2}".format(text, button.text(), scope)
+                                  if not domain or has_domain else
+                                  QC.translate("popups", "No domain name available for this connection"))
+
+    def _on_quick_action(self, action, duration_index, domain):
+        if self._con is None or self._done.is_set():
+            return
+        field = constants.FIELD_DST_HOST if domain else constants.FIELD_PROC_PATH
+        index = self.whatCombo.findData(field)
+        if index < 0:
+            return
+        if domain == "parent":
+            parent = utils.get_parent_domain(self._con.dst_host)
+            if not parent:
+                return
+            text = QC.translate("popups", "to *.{0}").format(parent)
+            index = self.whatCombo.findText(text)
+            if index < 0:
+                self.whatCombo.addItem(text, constants.FIELD_REGEX_HOST)
+                index = self.whatCombo.count() - 1
+        self.stop_countdown()
+        self.whatCombo.setCurrentIndex(index)
+        self.durationCombo.setCurrentIndex(duration_index)
+        # These shortcuts have an explicit scope, independent of advanced options.
+        for checkbox in (self.checkDstIP, self.checkDstPort, self.checkUserID, self.checkSum):
+            checkbox.setChecked(False)
+        self._on_action_clicked(action)
 
     def _cb_label_clicked(self, what):
         if self._ischeckAdvanceded is False:
@@ -246,11 +338,10 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         self.move_popup()
 
     def adjust_size(self):
-        if self._width is None or self._height is None:
-            self._width = self.width()
-            self._height = self.height()
-
-        self.resize(QtCore.QSize(self._width, self._height))
+        # Recalculate after rendering: a fixed designer height clips connection
+        # details when the shortcut panel or wrapped hostname needs more space.
+        self.layout().activate()
+        self.adjustSize()
 
     def move_popup(self):
         popup_pos = self._cfg.getInt(self._cfg.DEFAULT_POPUP_POSITION)
@@ -566,6 +657,8 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         if con.dst_host != "" and con.dst_host != con.dst_ip:
             utils.add_dsthost_to_combo(self, con.dst_host)
 
+        self._update_quick_actions(app_name, con)
+
         utils.add_ip_regexp_to_combo(self.whatCombo, self.whatIPCombo, con)
         utils.add_dst_networks_to_combo(self.whatIPCombo, con.dst_ip)
 
@@ -584,7 +677,7 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         self._set_cmd_action_text()
         self.checkAdvanced.setFocus()
 
-        self.setFixedSize(self.size())
+        self.adjust_size()
 
         self._post_popup_plugins(con)
 

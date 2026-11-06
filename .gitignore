@@ -1,6 +1,10 @@
 *.sock
 *.pyc
 *.profile
+.build/
+ui/build/
+ui/*.egg-info/
+daemon/opensnitchd
 
 ui/opensnitch/proto/
 daemon/ui/protocol/
