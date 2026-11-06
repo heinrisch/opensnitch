@@ -14,7 +14,7 @@ _domain_extract = tldextract.TLDExtract(
     suffix_list_urls=(), cache_dir=None, include_psl_private_domains=True)
 
 
-def get_parent_domain(host):
+def get_parent_domain(host, include_self=False):
     host = host.rstrip('.').lower()
     try:
         ipaddress.ip_address(host)
@@ -23,7 +23,7 @@ def get_parent_domain(host):
         pass
     result = _domain_extract(host)
     parent = result.top_domain_under_public_suffix
-    return parent if parent and parent != host else ""
+    return parent if parent and (include_self or parent != host) else ""
 
 def truncate_text(text, max_size=64):
     if len(text) > max_size:

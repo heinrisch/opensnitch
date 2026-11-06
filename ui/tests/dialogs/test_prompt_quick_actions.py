@@ -44,8 +44,8 @@ class QuickActionsTest(unittest.TestCase):
 
     def test_all_buttons_send_their_exact_scope_action_and_duration(self):
         buttons = self.dialog.findChildren(QtWidgets.QGroupBox)[0].findChildren(QtWidgets.QPushButton)
-        self.assertEqual(len(buttons), 18)
-        for row in range(6):
+        self.assertEqual(len(buttons), 15)
+        for row in range(5):
             for column, duration in enumerate(("always", "once", "1h")):
                 with self.subTest(row=row, duration=duration):
                     self.dialog._done.clear()
@@ -56,12 +56,12 @@ class QuickActionsTest(unittest.TestCase):
                     rule = self.dialog._rule
                     self.assertTrue(self.dialog._done.is_set())
                     self.assertEqual(rule.duration, duration)
-                    self.assertEqual(rule.action, "allow" if row % 2 == 0 else "deny")
+                    self.assertEqual(rule.action, "deny" if row in (1, 4) else "allow")
                     self.assertEqual(rule.operator.type,
-                                     Config.RULE_TYPE_REGEXP if row >= 4 else Config.RULE_TYPE_SIMPLE)
+                                     Config.RULE_TYPE_REGEXP if row >= 3 else Config.RULE_TYPE_SIMPLE)
                     self.assertEqual(rule.operator.operand,
                                      Config.OPERAND_DEST_HOST if row >= 2 else Config.OPERAND_PROCESS_PATH)
-                    if row >= 4:
+                    if row >= 3:
                         for host in ("example.com", "bla.example.com", "deep.bla.example.com"):
                             self.assertIsNotNone(re.fullmatch(rule.operator.data, host))
                         for host in ("notexample.com", "example.com.evil.org", "exampleXcom"):
@@ -82,7 +82,7 @@ class QuickActionsTest(unittest.TestCase):
 
     def test_parent_rows_show_the_domain_and_subdomain_scope(self):
         self.dialog._update_quick_actions("Example", self.dialog._con)
-        label, buttons, _, _ = self.dialog._quick_rows[4]
+        label, buttons, _, _ = self.dialog._quick_rows[3]
         self.assertEqual(label.text(), "Allow example.com")
         self.assertFalse(label.isHidden())
         self.assertIn("all its subdomains", buttons[0].toolTip())
@@ -90,6 +90,13 @@ class QuickActionsTest(unittest.TestCase):
         self.dialog._update_quick_actions("Example", self.dialog._con)
         self.assertTrue(label.isHidden())
         self.assertTrue(all(button.isHidden() for button in buttons))
+        block_label, block_buttons, _, _ = self.dialog._quick_rows[4]
+        self.assertEqual(block_label.text(), "Block example.com")
+        self.assertFalse(block_label.isHidden())
+        self.dialog._done.clear()
+        block_buttons[0].click()
+        self.assertEqual(self.dialog._rule.action, "deny")
+        self.assertIsNotNone(re.fullmatch(self.dialog._rule.operator.data, "api.example.com"))
 
     def test_missing_domain_does_not_send_a_rule(self):
         self.dialog.whatCombo.removeItem(1)

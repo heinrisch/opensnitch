@@ -164,11 +164,17 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         rows = (("Allow app", Config.ACTION_ALLOW_IDX, False),
                 ("Block app", Config.ACTION_DROP_IDX, False),
                 ("Allow domain", Config.ACTION_ALLOW_IDX, True),
-                ("Block domain", Config.ACTION_DROP_IDX, True),
                 ("Allow parent domain", Config.ACTION_ALLOW_IDX, "parent"),
                 ("Block parent domain", Config.ACTION_DROP_IDX, "parent"))
         for row, (label, action, domain) in enumerate(rows, 1):
             scope_label = QtWidgets.QLabel(QC.translate("popups", label))
+            if domain:
+                font = scope_label.font()
+                if font.pointSizeF() > 0:
+                    font.setPointSizeF(font.pointSizeF() + 2)
+                else:
+                    font.setPixelSize(font.pixelSize() + 3)
+                scope_label.setFont(font)
             scope_label.setTextFormat(QtCore.Qt.TextFormat.PlainText)
             scope_label.setWordWrap(True)
             scope_label.setMinimumWidth(150)
@@ -193,9 +199,11 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
 
     def _update_quick_actions(self, app_name, con):
         has_domain = self.whatCombo.findData(constants.FIELD_DST_HOST) >= 0
-        parent = utils.get_parent_domain(con.dst_host) if has_domain else ""
+        parent = utils.get_parent_domain(con.dst_host, include_self=True) if has_domain else ""
         for label, buttons, action, domain in self._quick_rows:
             is_parent = domain == "parent"
+            show_parent = bool(parent) and (
+                action == Config.ACTION_DROP_IDX or parent != con.dst_host.rstrip('.').lower())
             target = parent if is_parent else con.dst_host if domain else app_name
             if not target:
                 target = QC.translate("popups", "domain" if domain else "application")
@@ -203,9 +211,9 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
             label.setText(text)
             label.setToolTip(text)
             label.setEnabled(not domain or has_domain)
-            label.setVisible(not is_parent or bool(parent))
+            label.setVisible(not is_parent or show_parent)
             for button in buttons:
-                button.setVisible(not is_parent or bool(parent))
+                button.setVisible(not is_parent or show_parent)
                 button.setEnabled(not domain or has_domain)
                 button.setAccessibleName("{0} · {1}".format(text, button.text()))
                 scope = (QC.translate("popups", "This exact hostname, across all applications")
@@ -224,7 +232,7 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         if index < 0:
             return
         if domain == "parent":
-            parent = utils.get_parent_domain(self._con.dst_host)
+            parent = utils.get_parent_domain(self._con.dst_host, include_self=True)
             if not parent:
                 return
             text = QC.translate("popups", "to *.{0}").format(parent)
