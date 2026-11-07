@@ -6,7 +6,7 @@ import re
 import unittest
 from unittest.mock import Mock
 
-from PyQt6 import QtWidgets
+from PyQt6 import QtGui, QtTest, QtWidgets
 import opensnitch.utils  # Initialize the application's shared imports first.
 from opensnitch.config import Config
 from opensnitch.dialogs.prompt.dialog import PromptDialog, ui_pb2
@@ -120,6 +120,40 @@ class QuickActionsTest(unittest.TestCase):
         rule = self.dialog._rule
         self.dialog._on_quick_action(Config.ACTION_DROP_IDX, 8, True)
         self.assertIs(self.dialog._rule, rule)
+
+    def test_letter_shortcuts_match_buttons_and_send_rules(self):
+        self.dialog.showEvent = Mock()
+        self.dialog.show()
+        self.dialog.activateWindow()
+        self.app.processEvents()
+        shortcuts = self.dialog.findChildren(QtGui.QShortcut)
+        self.assertEqual(len(shortcuts), 15)
+        self.assertEqual(len({shortcut.key().toString() for shortcut in shortcuts}), 15)
+        for shortcut in shortcuts:
+            with self.subTest(key=shortcut.key().toString()):
+                self.dialog._done.clear()
+                self.dialog.show()
+                self.dialog.activateWindow()
+                self.app.processEvents()
+                button = shortcut.parent()
+                self.assertIn("[{}]".format(shortcut.key().toString().lower()), button.text())
+                button.setFocus()
+                QtTest.QTest.keyClick(button, shortcut.key()[0].key())
+                self.assertTrue(self.dialog._done.is_set())
+                self.assertEqual(self.dialog._rule.duration,
+                                 {"Forever": "always", "Once": "once", "1h": "1h"}[
+                                     button.property("durationLabel")])
+
+    def test_shortcut_does_not_submit_while_editing(self):
+        self.dialog.showEvent = Mock()
+        editor = QtWidgets.QLineEdit(self.dialog)
+        self.dialog.show()
+        editor.show()
+        editor.setFocus()
+        self.app.processEvents()
+        button = self.dialog._quick_rows[0][1][0]
+        self.dialog._activate_quick_shortcut(button)
+        self.assertFalse(self.dialog._done.is_set())
 
 
 if __name__ == "__main__":

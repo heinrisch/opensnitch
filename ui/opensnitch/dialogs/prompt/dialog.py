@@ -161,6 +161,7 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         self._domain_buttons = []
         self._quick_rows = []
         durations = (("Forever", 8), ("Once", 0), ("1h", 5))
+        shortcut_keys = ("ash", "dfg", "jkl", "qwe", "rty")
         rows = (("Allow app", Config.ACTION_ALLOW_IDX, False),
                 ("Block app", Config.ACTION_DROP_IDX, False),
                 ("Allow domain", Config.ACTION_ALLOW_IDX, True),
@@ -183,6 +184,13 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
             buttons = []
             for column, (duration, index) in enumerate(durations, 1):
                 button = QtWidgets.QPushButton(QC.translate("popups", duration))
+                key = shortcut_keys[row - 1][column - 1]
+                button.setProperty("durationLabel", button.text())
+                button.setText("{0} [{1}]".format(button.text(), key))
+                shortcut = QtGui.QShortcut(QtGui.QKeySequence(key), button)
+                shortcut.setAutoRepeat(False)
+                shortcut.activated.connect(
+                    lambda b=button: self._activate_quick_shortcut(b))
                 button.setMinimumHeight(32)
                 button.setAutoDefault(False)
                 button.clicked.connect(
@@ -196,6 +204,16 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         for column in range(1, 4):
             layout.setColumnStretch(column, 1)
         self.gridLayout.addWidget(panel, 2, 0)
+
+    def _activate_quick_shortcut(self, button):
+        focus = self.focusWidget()
+        if isinstance(focus, (QtWidgets.QLineEdit, QtWidgets.QTextEdit,
+                              QtWidgets.QPlainTextEdit, QtWidgets.QAbstractSpinBox)):
+            return
+        if isinstance(focus, QtWidgets.QComboBox) and focus.isEditable():
+            return
+        if button.isVisible() and button.isEnabled():
+            button.click()
 
     def _update_quick_actions(self, app_name, con):
         has_domain = self.whatCombo.findData(constants.FIELD_DST_HOST) >= 0
@@ -215,7 +233,7 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
             for button in buttons:
                 button.setVisible(not is_parent or show_parent)
                 button.setEnabled(not domain or has_domain)
-                button.setAccessibleName("{0} · {1}".format(text, button.text()))
+                button.setAccessibleName("{0} · {1}".format(text, button.property("durationLabel")))
                 scope = (QC.translate("popups", "This exact hostname, across all applications")
                          if domain else con.process_path)
                 if is_parent:
