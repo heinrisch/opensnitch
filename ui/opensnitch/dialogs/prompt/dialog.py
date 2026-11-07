@@ -153,20 +153,25 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         self.setMinimumWidth(560)
         self.gridLayout.setContentsMargins(12, 12, 12, 12)
         self.gridLayout.setVerticalSpacing(12)
+        self.gridLayout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         panel = QtWidgets.QGroupBox(QC.translate("popups", "Quick decisions"), self)
+        panel.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                            QtWidgets.QSizePolicy.Policy.Maximum)
         layout = QtWidgets.QGridLayout(panel)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
         layout.setContentsMargins(12, 18, 12, 12)
         layout.setHorizontalSpacing(8)
         layout.setVerticalSpacing(8)
         self._domain_buttons = []
         self._quick_rows = []
-        durations = (("Forever", 8), ("Once", 0), ("1h", 5))
-        shortcut_keys = ("ash", "dfg", "jkl", "qwe", "rty")
+        durations = (("Forever", 8), ("1h", 5))
+        shortcut_keys = ("ah", "dg", "jl", "qe", "ry", "uo")
         rows = (("Allow app", Config.ACTION_ALLOW_IDX, False),
                 ("Block app", Config.ACTION_DROP_IDX, False),
                 ("Allow domain", Config.ACTION_ALLOW_IDX, True),
                 ("Allow parent domain", Config.ACTION_ALLOW_IDX, "parent"),
-                ("Block parent domain", Config.ACTION_DROP_IDX, "parent"))
+                ("Block parent domain", Config.ACTION_DROP_IDX, "parent"),
+                ("Block domain", Config.ACTION_DROP_IDX, True))
         for row, (label, action, domain) in enumerate(rows, 1):
             scope_label = QtWidgets.QLabel(QC.translate("popups", label))
             if domain:
@@ -191,7 +196,10 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
                 shortcut.setAutoRepeat(False)
                 shortcut.activated.connect(
                     lambda b=button: self._activate_quick_shortcut(b))
-                button.setMinimumHeight(32)
+                button.setMinimumHeight(40)
+                button.setMaximumHeight(56)
+                button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                                     QtWidgets.QSizePolicy.Policy.Expanding)
                 button.setAutoDefault(False)
                 button.clicked.connect(
                     lambda checked=False, a=action, d=index, host=domain:
@@ -201,9 +209,10 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
                 if domain:
                     self._domain_buttons.append(button)
             self._quick_rows.append((scope_label, buttons, action, domain))
-        for column in range(1, 4):
+        for column in range(1, 3):
             layout.setColumnStretch(column, 1)
         self.gridLayout.addWidget(panel, 2, 0)
+        self.gridLayout.setRowStretch(2, 1)
 
     def _activate_quick_shortcut(self, button):
         focus = self.focusWidget()
@@ -226,6 +235,8 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
             if not target:
                 target = QC.translate("popups", "domain" if domain else "application")
             text = QC.translate("popups", "Allow {0}" if action == Config.ACTION_ALLOW_IDX else "Block {0}").format(target)
+            if is_parent:
+                text = QC.translate("popups", "{0} (including subdomains)").format(text)
             label.setText(text)
             label.setToolTip(text)
             label.setEnabled(not domain or has_domain)

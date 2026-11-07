@@ -44,31 +44,62 @@ class QuickActionsTest(unittest.TestCase):
 
     def test_all_buttons_send_their_exact_scope_action_and_duration(self):
         buttons = self.dialog.findChildren(QtWidgets.QGroupBox)[0].findChildren(QtWidgets.QPushButton)
-        self.assertEqual(len(buttons), 15)
-        for row in range(5):
-            for column, duration in enumerate(("always", "once", "1h")):
+        self.assertEqual(len(buttons), 12)
+        for row, (_, row_buttons, action, domain) in enumerate(self.dialog._quick_rows):
+            for button in row_buttons:
+                duration = {"Forever": "always", "1h": "1h"}[
+                    button.property("durationLabel")]
                 with self.subTest(row=row, duration=duration):
                     self.dialog._done.clear()
                     for checkbox in (self.dialog.checkDstIP, self.dialog.checkDstPort,
                                      self.dialog.checkUserID, self.dialog.checkSum):
                         checkbox.setChecked(True)
-                    buttons[row * 3 + column].click()
+                    button.click()
                     rule = self.dialog._rule
                     self.assertTrue(self.dialog._done.is_set())
                     self.assertEqual(rule.duration, duration)
-                    self.assertEqual(rule.action, "deny" if row in (1, 4) else "allow")
+                    self.assertEqual(rule.action, "allow" if action == Config.ACTION_ALLOW_IDX else "deny")
                     self.assertEqual(rule.operator.type,
-                                     Config.RULE_TYPE_REGEXP if row >= 3 else Config.RULE_TYPE_SIMPLE)
+                                     Config.RULE_TYPE_REGEXP if domain == "parent" else Config.RULE_TYPE_SIMPLE)
                     self.assertEqual(rule.operator.operand,
-                                     Config.OPERAND_DEST_HOST if row >= 2 else Config.OPERAND_PROCESS_PATH)
-                    if row >= 3:
+                                     Config.OPERAND_DEST_HOST if domain else Config.OPERAND_PROCESS_PATH)
+                    if domain == "parent":
                         for host in ("example.com", "bla.example.com", "deep.bla.example.com"):
                             self.assertIsNotNone(re.fullmatch(rule.operator.data, host))
                         for host in ("notexample.com", "example.com.evil.org", "exampleXcom"):
                             self.assertIsNone(re.fullmatch(rule.operator.data, host))
                     else:
                         self.assertEqual(rule.operator.data,
-                                         "api.example.com" if row >= 2 else "/usr/bin/example")
+                                         "api.example.com" if domain else "/usr/bin/example")
+
+    def test_once_is_not_a_quick_decision(self):
+        for _, buttons, _, _ in self.dialog._quick_rows:
+            self.assertEqual([button.property("durationLabel") for button in buttons],
+                             ["Forever", "1h"])
+
+    def test_quick_buttons_grow_with_available_window_space(self):
+        self.dialog.showEvent = Mock(return_value=None)
+        self.dialog.show()
+        self.app.processEvents()
+        button = self.dialog._quick_rows[0][1][0]
+        initial = button.size()
+        self.dialog.resize(self.dialog.width() + 300, self.dialog.height() + 180)
+        self.app.processEvents()
+        self.assertGreater(button.width(), initial.width())
+        self.assertGreaterEqual(button.height(), 40)
+
+    def test_hidden_parent_row_leaves_no_large_gap_in_tall_window(self):
+        self.dialog.showEvent = Mock(return_value=None)
+        self.dialog._con.dst_host = "meta.com"
+        self.dialog._update_quick_actions("curl", self.dialog._con)
+        self.dialog.resize(1500, 1700)
+        self.dialog.show()
+        self.app.processEvents()
+        visible = [buttons[0] for label, buttons, _, _ in self.dialog._quick_rows
+                   if not label.isHidden()]
+        for previous, current in zip(visible, visible[1:]):
+            self.assertLess(current.y() - (previous.y() + previous.height()), 24)
+        self.assertLess(visible[-1].geometry().bottom() - visible[0].y(), 400)
 
     def test_parent_domain_respects_public_and_private_suffixes(self):
         for host, parent in (("bla.example.com", "example.com"),
@@ -83,7 +114,7 @@ class QuickActionsTest(unittest.TestCase):
     def test_parent_rows_show_the_domain_and_subdomain_scope(self):
         self.dialog._update_quick_actions("Example", self.dialog._con)
         label, buttons, _, _ = self.dialog._quick_rows[3]
-        self.assertEqual(label.text(), "Allow example.com")
+        self.assertEqual(label.text(), "Allow example.com (including subdomains)")
         self.assertFalse(label.isHidden())
         self.assertIn("all its subdomains", buttons[0].toolTip())
         self.dialog._con.dst_host = "example.com"
@@ -91,7 +122,7 @@ class QuickActionsTest(unittest.TestCase):
         self.assertTrue(label.isHidden())
         self.assertTrue(all(button.isHidden() for button in buttons))
         block_label, block_buttons, _, _ = self.dialog._quick_rows[4]
-        self.assertEqual(block_label.text(), "Block example.com")
+        self.assertEqual(block_label.text(), "Block example.com (including subdomains)")
         self.assertFalse(block_label.isHidden())
         self.dialog._done.clear()
         block_buttons[0].click()
@@ -122,13 +153,13 @@ class QuickActionsTest(unittest.TestCase):
         self.assertIs(self.dialog._rule, rule)
 
     def test_letter_shortcuts_match_buttons_and_send_rules(self):
-        self.dialog.showEvent = Mock()
+        self.dialog.showEvent = Mock(return_value=None)
         self.dialog.show()
         self.dialog.activateWindow()
         self.app.processEvents()
         shortcuts = self.dialog.findChildren(QtGui.QShortcut)
-        self.assertEqual(len(shortcuts), 15)
-        self.assertEqual(len({shortcut.key().toString() for shortcut in shortcuts}), 15)
+        self.assertEqual(len(shortcuts), 12)
+        self.assertEqual(len({shortcut.key().toString() for shortcut in shortcuts}), 12)
         for shortcut in shortcuts:
             with self.subTest(key=shortcut.key().toString()):
                 self.dialog._done.clear()
@@ -141,11 +172,11 @@ class QuickActionsTest(unittest.TestCase):
                 QtTest.QTest.keyClick(button, shortcut.key()[0].key())
                 self.assertTrue(self.dialog._done.is_set())
                 self.assertEqual(self.dialog._rule.duration,
-                                 {"Forever": "always", "Once": "once", "1h": "1h"}[
+                                 {"Forever": "always", "1h": "1h"}[
                                      button.property("durationLabel")])
 
     def test_shortcut_does_not_submit_while_editing(self):
-        self.dialog.showEvent = Mock()
+        self.dialog.showEvent = Mock(return_value=None)
         editor = QtWidgets.QLineEdit(self.dialog)
         self.dialog.show()
         editor.show()
