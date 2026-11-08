@@ -44,7 +44,7 @@ class QuickActionsTest(unittest.TestCase):
 
     def test_all_buttons_send_their_exact_scope_action_and_duration(self):
         buttons = self.dialog.findChildren(QtWidgets.QGroupBox)[0].findChildren(QtWidgets.QPushButton)
-        self.assertEqual(len(buttons), 12)
+        self.assertEqual(len(buttons), 13)
         for row, (_, row_buttons, action, domain) in enumerate(self.dialog._quick_rows):
             for button in row_buttons:
                 duration = {"Forever": "always", "1h": "1h"}[
@@ -72,7 +72,13 @@ class QuickActionsTest(unittest.TestCase):
                         self.assertEqual(rule.operator.data,
                                          "api.example.com" if domain else "/usr/bin/example")
 
-    def test_once_is_not_a_quick_decision(self):
+    def test_allow_once_sends_a_one_time_allow_decision(self):
+        self.dialog.allowOnceButton.click()
+        self.assertTrue(self.dialog._done.is_set())
+        self.assertEqual(self.dialog._rule.action, Config.ACTION_ALLOW)
+        self.assertEqual(self.dialog._rule.duration, Config.DURATION_ONCE)
+
+    def test_scoped_buttons_keep_their_existing_durations(self):
         for _, buttons, _, _ in self.dialog._quick_rows:
             self.assertEqual([button.property("durationLabel") for button in buttons],
                              ["Forever", "1h"])
@@ -158,8 +164,8 @@ class QuickActionsTest(unittest.TestCase):
         self.dialog.activateWindow()
         self.app.processEvents()
         shortcuts = self.dialog.findChildren(QtGui.QShortcut)
-        self.assertEqual(len(shortcuts), 12)
-        self.assertEqual(len({shortcut.key().toString() for shortcut in shortcuts}), 12)
+        self.assertEqual(len(shortcuts), 13)
+        self.assertEqual(len({shortcut.key().toString() for shortcut in shortcuts}), 13)
         for shortcut in shortcuts:
             with self.subTest(key=shortcut.key().toString()):
                 self.dialog._done.clear()
@@ -172,7 +178,7 @@ class QuickActionsTest(unittest.TestCase):
                 QtTest.QTest.keyClick(button, shortcut.key()[0].key())
                 self.assertTrue(self.dialog._done.is_set())
                 self.assertEqual(self.dialog._rule.duration,
-                                 {"Forever": "always", "1h": "1h"}[
+                                 {"Forever": "always", "1h": "1h", None: Config.DURATION_ONCE}[
                                      button.property("durationLabel")])
 
     def test_shortcut_does_not_submit_while_editing(self):

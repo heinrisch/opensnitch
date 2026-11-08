@@ -211,6 +211,20 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
             self._quick_rows.append((scope_label, buttons, action, domain))
         for column in range(1, 3):
             layout.setColumnStretch(column, 1)
+        self.allowOnceButton = QtWidgets.QPushButton(
+            QC.translate("popups", "Allow once") + " [n]", panel)
+        self.allowOnceButton.setAccessibleName(QC.translate("popups", "Allow once"))
+        self.allowOnceButton.setToolTip(
+            QC.translate("popups", "Allow only this connection without remembering the decision"))
+        self.allowOnceButton.setMinimumHeight(40)
+        self.allowOnceButton.setAutoDefault(False)
+        self.allowOnceButton.clicked.connect(
+            lambda checked=False: self._on_quick_action(Config.ACTION_ALLOW_IDX, 0, False))
+        shortcut = QtGui.QShortcut(QtGui.QKeySequence("n"), self.allowOnceButton)
+        shortcut.setAutoRepeat(False)
+        shortcut.activated.connect(
+            lambda: self._activate_quick_shortcut(self.allowOnceButton))
+        layout.addWidget(self.allowOnceButton, len(rows) + 1, 1, 1, 2)
         self.gridLayout.addWidget(panel, 2, 0)
         self.gridLayout.setRowStretch(2, 1)
 
