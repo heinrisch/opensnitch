@@ -44,7 +44,7 @@ class QuickActionsTest(unittest.TestCase):
 
     def test_all_buttons_send_their_exact_scope_action_and_duration(self):
         buttons = self.dialog.findChildren(QtWidgets.QGroupBox)[0].findChildren(QtWidgets.QPushButton)
-        self.assertEqual(len(buttons), 13)
+        self.assertEqual(len(buttons), 14)
         for row, (_, row_buttons, action, domain) in enumerate(self.dialog._quick_rows):
             for button in row_buttons:
                 duration = {"Forever": "always", "1h": "1h"}[
@@ -82,6 +82,12 @@ class QuickActionsTest(unittest.TestCase):
         for _, buttons, _, _ in self.dialog._quick_rows:
             self.assertEqual([button.property("durationLabel") for button in buttons],
                              ["Forever", "1h"])
+
+    def test_block_once_sends_a_one_time_block_decision(self):
+        self.dialog.blockOnceButton.click()
+        self.assertTrue(self.dialog._done.is_set())
+        self.assertEqual(self.dialog._rule.action, Config.ACTION_DENY)
+        self.assertEqual(self.dialog._rule.duration, Config.DURATION_ONCE)
 
     def test_quick_buttons_grow_with_available_window_space(self):
         self.dialog.showEvent = Mock(return_value=None)
@@ -164,8 +170,8 @@ class QuickActionsTest(unittest.TestCase):
         self.dialog.activateWindow()
         self.app.processEvents()
         shortcuts = self.dialog.findChildren(QtGui.QShortcut)
-        self.assertEqual(len(shortcuts), 13)
-        self.assertEqual(len({shortcut.key().toString() for shortcut in shortcuts}), 13)
+        self.assertEqual(len(shortcuts), 14)
+        self.assertEqual(len({shortcut.key().toString() for shortcut in shortcuts}), 14)
         for shortcut in shortcuts:
             with self.subTest(key=shortcut.key().toString()):
                 self.dialog._done.clear()

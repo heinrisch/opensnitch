@@ -150,6 +150,8 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         self._setup_quick_actions()
 
     def _setup_quick_actions(self):
+        self._style_action_button(self.allowButton, Config.ACTION_ALLOW_IDX)
+        self._style_action_button(self.actionButton, Config.ACTION_DROP_IDX)
         self.setMinimumWidth(560)
         self.gridLayout.setContentsMargins(12, 12, 12, 12)
         self.gridLayout.setVerticalSpacing(12)
@@ -189,6 +191,7 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
             buttons = []
             for column, (duration, index) in enumerate(durations, 1):
                 button = QtWidgets.QPushButton(QC.translate("popups", duration))
+                self._style_action_button(button, action)
                 key = shortcut_keys[row - 1][column - 1]
                 button.setProperty("durationLabel", button.text())
                 button.setText("{0} [{1}]".format(button.text(), key))
@@ -213,6 +216,7 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
             layout.setColumnStretch(column, 1)
         self.allowOnceButton = QtWidgets.QPushButton(
             QC.translate("popups", "Allow once") + " [n]", panel)
+        self._style_action_button(self.allowOnceButton, Config.ACTION_ALLOW_IDX)
         self.allowOnceButton.setAccessibleName(QC.translate("popups", "Allow once"))
         self.allowOnceButton.setToolTip(
             QC.translate("popups", "Allow only this connection without remembering the decision"))
@@ -224,9 +228,39 @@ class PromptDialog(QtWidgets.QDialog, uic.loadUiType(DIALOG_UI_PATH)[0]):
         shortcut.setAutoRepeat(False)
         shortcut.activated.connect(
             lambda: self._activate_quick_shortcut(self.allowOnceButton))
-        layout.addWidget(self.allowOnceButton, len(rows) + 1, 1, 1, 2)
+        layout.addWidget(self.allowOnceButton, len(rows) + 1, 1)
+        self.blockOnceButton = QtWidgets.QPushButton(
+            QC.translate("popups", "Block once") + " [b]", panel)
+        self._style_action_button(self.blockOnceButton, Config.ACTION_DROP_IDX)
+        self.blockOnceButton.setAccessibleName(QC.translate("popups", "Block once"))
+        self.blockOnceButton.setToolTip(
+            QC.translate("popups", "Block only this connection without remembering the decision"))
+        self.blockOnceButton.setMinimumHeight(40)
+        self.blockOnceButton.setAutoDefault(False)
+        self.blockOnceButton.clicked.connect(
+            lambda checked=False: self._on_quick_action(Config.ACTION_DROP_IDX, 0, False))
+        shortcut = QtGui.QShortcut(QtGui.QKeySequence("b"), self.blockOnceButton)
+        shortcut.setAutoRepeat(False)
+        shortcut.activated.connect(
+            lambda: self._activate_quick_shortcut(self.blockOnceButton))
+        layout.addWidget(self.blockOnceButton, len(rows) + 1, 2)
         self.gridLayout.addWidget(panel, 2, 0)
         self.gridLayout.setRowStretch(2, 1)
+
+    @staticmethod
+    def _style_action_button(button, action):
+        normal, hover, pressed = (("#237a3b", "#2b8a46", "#195c2b")
+                                  if action == Config.ACTION_ALLOW_IDX else
+                                  ("#b32624", "#c53230", "#8e1e1c"))
+        button.setStyleSheet("""
+            QPushButton { background-color: %s; color: white;
+                          border: 1px solid %s; border-radius: 4px; padding: 6px 12px; }
+            QPushButton:hover { background-color: %s; }
+            QPushButton:pressed { background-color: %s; }
+            QPushButton:focus { border: 2px solid white; }
+            QPushButton:disabled { background-color: #666666; color: #cccccc;
+                                   border-color: #777777; }
+        """ % (normal, normal, hover, pressed))
 
     def _activate_quick_shortcut(self, button):
         focus = self.focusWidget()
